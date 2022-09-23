@@ -1,2 +1,4 @@
 section .data
-	var dd '12'
+	newLine db 0x0a
+	a dw '01', 0x0
+	b dw '01', 0x0

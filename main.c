@@ -15,7 +15,9 @@ bool lexNumber(char);
 bool lexKeyword(char*);
 bool finalDelimiter(char);
 
-void writeVariable(char*, int, char*, FILE*, FILE*);
+void writeVariable(char*, int, FILE*, FILE*);
+void assignVariable(char*, char*, FILE*);
+void printVariable(char*, FILE*);
 
 int main(){
 	FILE *fdata = fopen("./compiled/src/data.src", "r+"), *fstart = fopen("./compiled/src/start.src", "r+"), *fsrc = fopen("./testproject/main.nl", "r+");
@@ -40,6 +42,8 @@ int main(){
 	fprintf(fstart, "	res resb 4\n\n");
 	fprintf(fstart, "section .text\n	global _start\n\n");
 	fprintf(fdata, "section .data\n");
+	fprintf(fdata, "\tnewLine db 0x0a\n");
+	
 	fprintf(fstart, "_start:\n");
 	if (fdata == NULL || fsrc == NULL){
 		printf("error");
@@ -84,11 +88,12 @@ int main(){
 
 bool parser(char* input, FILE* fdata, FILE* fstart){
 	unsigned counter = 0, i = 0, j = 0, digits = 0, variables = 0;
+	unsigned varBits = 0;
 	char* varValue = malloc(sizeof(char) * 128);
 	char* word = malloc(sizeof(char) * 1024);
 	char* varName = malloc(sizeof(char) * 128);
 	char c;
-	bool number = false;
+	bool number = false, assign = false, print = false;
 	for (c = *input; c != '\0'; c = input[++i]){
 		if (lexDelimiter(c)){
 			word[counter] = '\0';
@@ -106,6 +111,10 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 					printf("[keyword]");
 					if (lexDecVar(word)){
 						variables++;
+						varBits = word[1] - '0';
+					}
+					if (strcmp(word, "put") == 0){
+						print = true;
 					}
 				}else{
 					if (number == false ){
@@ -117,16 +126,24 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 							}
 							varName[j] = '\0';
 							printf("%s", varName);
+							writeVariable(varName, varBits, fdata, fstart);
 							variables--;
 						}else{
-							printf("[error]");
+							if (print == false){
+								printf("[error]");
+							}else{
+								printf("[variableToWrite]");
+								printVariable(word, fstart);
+							}
 						}
 					}
 					if (number == true){
 						printf("[number(%i)]", digits);
-						writeVariable(varName, digits, varValue, fdata, fstart);
+						assignVariable(varName, varValue, fstart);
+						strcpy(varValue, "");
 						number = false;
 						digits = 0;
+						varBits = 0;
 					}
 				}
 			}
@@ -141,6 +158,11 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 			if (lexLogOperator(c)){
 				printf("%c", c);
 				printf("[Logic operator]");
+				switch (c) {
+					case '=':
+						assign = true;
+					break;
+				}
 			}
 			printf("\n");
 			counter = 0;
@@ -206,7 +228,7 @@ bool lexNumber(char ch){
 
 bool lexKeyword(char* word){
 	if (
-		strcmp(word, "i4") == 0 || strcmp(word, "fn") == 0 || strcmp(word, "put") == 0
+		strcmp(word, "i4") == 0 || strcmp(word, "i2") == 0 || strcmp(word, "fn") == 0 || strcmp(word, "put") == 0
 		)
 	{
 		return true;
@@ -224,14 +246,25 @@ bool lexDecVar(char* word){
 	return false;
 }
 
-void writeVariable(char* variable, int digCount, char* value, FILE* fdata, FILE* fstart){
-	fprintf(fstart, "	mov ecx, [%s]\n", variable);
-	
-	fprintf(fstart, "	mov edx, %d\n", digCount);
-	fprintf(fstart, "	mov ecx, %s\n", variable);
-	fprintf(fstart, "	mov ebx, 1\n");
-	fprintf(fstart, "	mov eax, 4\n");
-	fprintf(fstart, "	int 0x80\n\t\n");
+void writeVariable(char* variable, int digCount, FILE* fdata, FILE* fstart){
+	switch (digCount) {
+		case 2 :
+			fprintf(fdata, "\t%s dw '01', 0x0\n", variable);
+		break;
+		case 4 :
+			fprintf(fdata, "\t%s dd '0001', 0x0\n", variable);
+		break;
+	}
+}
+void assignVariable(char* variable, char* value, FILE* fstart){
+	fprintf(fstart, "\tmov ecx, '%s'\n", value);
+	fprintf(fstart, "\tmov [%s], ecx\n\t\n", variable);
+}
+void printVariable(char* variable, FILE* fstart){
 
-	fprintf(fdata, "	%s dd '%s'\n", variable, value);
+	fprintf(fstart, "\tmov edx, %d\n", 1);
+	fprintf(fstart, "\tmov ecx, %s\n", variable);
+	fprintf(fstart, "\tmov ebx, 1\n");
+	fprintf(fstart, "\tmov eax, 4\n");
+	fprintf(fstart, "\tint 0x80\n\t\n");
 }
