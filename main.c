@@ -4,7 +4,7 @@
 
 #include "bools.h"
 
-bool parser(char*, FILE*);
+bool parser(char*, FILE*, FILE*);
 
 /*Lexicon*/
 bool lexDecVar(char*);
@@ -15,29 +15,74 @@ bool lexNumber(char);
 bool lexKeyword(char*);
 bool finalDelimiter(char);
 
-void writeVariable(char*, int, char*, FILE*);
+void writeVariable(char*, int, char*, FILE*, FILE*);
 
 int main(){
-	FILE *fptr;
-	char* input = "i4 testVar = 7;";
-	fptr = fopen("./files/main.asm", "w+");
-	/*fprintf(fptr, "	.global _start\n\n	.text\n");
-	fprintf(fptr, "_start:\n");*/
-	/*fprintf(fptr, "section .data\n");*/
-	/*fprintf(fptr, "section .text\n	global _start\n\n");*/
-	fprintf(fptr, "section .text\n	global _start\n\n");
-	fprintf(fptr, "_start:\n");
-	if (fptr == NULL){
+	FILE *fdata = fopen("./compiled/src/data.src", "r+"), *fstart = fopen("./compiled/src/start.src", "r+"), *fsrc = fopen("./testproject/main.nl", "r+");
+	FILE *fasm = fopen("./compiled/main.asm", "w+");
+	char* sourceBuffer = 0, *dataBuffer = 0, *startBuffer = 0;
+	long length = 0;
+	if (fsrc){
+		fseek(fsrc, 0, SEEK_END);
+		length = ftell(fsrc);
+		fseek(fsrc, 0, SEEK_SET);
+		sourceBuffer = malloc(length+1);
+		if (sourceBuffer){
+			fread(sourceBuffer, 1, length, fsrc);
+		}
+		fclose(fsrc);
+		sourceBuffer[length] = '\0';
+	}
+	freopen(NULL,"w+", fstart);
+	freopen(NULL,"w+", fdata);
+	freopen(NULL,"w+", fasm);
+	fprintf(fstart, "section .bss\n");
+	fprintf(fstart, "	res resb 4\n\n");
+	fprintf(fstart, "section .text\n	global _start\n\n");
+	fprintf(fdata, "section .data\n");
+	fprintf(fstart, "_start:\n");
+	if (fdata == NULL || fsrc == NULL){
 		printf("error");
 		exit(1);
 	}
-	printf("%s\n\n", input);
-	parser(input, fptr);
-	fclose(fptr);
+
+	printf("%s\n\n", sourceBuffer);
+	parser(sourceBuffer, fdata, fstart);
+	fprintf(fstart, "	mov eax, 1\n");
+	fprintf(fstart, "	int 80h ;\n\n");
+
+	if (fstart){
+		length = 0;
+		fseek(fstart, 0, SEEK_END);
+		length = ftell(fstart);
+		fseek(fstart, 0, SEEK_SET);
+		startBuffer = malloc(length+1);
+		if (startBuffer){
+			fread(startBuffer, 1, length, fstart);
+		}
+		fclose(fstart);
+		startBuffer[length] = '\0';
+	}
+	if (fdata){
+		length = 0;
+		fseek(fdata, 0, SEEK_END);
+		length = ftell(fdata);
+		fseek(fdata, 0, SEEK_SET);
+		dataBuffer = malloc(length+1);
+		if (dataBuffer){
+			fread(dataBuffer, 1, length, fdata);
+		}
+		fclose(fdata);
+		dataBuffer[length] = '\0';
+	}
+
+	fprintf(fasm, "%s", startBuffer);
+	fprintf(fasm, "%s", dataBuffer);
+
 	return 0;
 }
 
-bool parser(char* input, FILE* fptr){
+bool parser(char* input, FILE* fdata, FILE* fstart){
 	unsigned counter = 0, i = 0, j = 0, digits = 0, variables = 0;
 	char* varValue = malloc(sizeof(char) * 128);
 	char* word = malloc(sizeof(char) * 1024);
@@ -51,10 +96,10 @@ bool parser(char* input, FILE* fptr){
 				printf("%s", word);
 				if (lexNumber(word[digits])){
 					while(lexNumber(word[digits])){
-						varValue[digits] = '\0';
 						varValue[digits] = word[digits];
 						digits++;
 					}
+					varValue[digits] = '\0';
 					number = true;
 				}
 				if (lexKeyword(word)){
@@ -66,11 +111,11 @@ bool parser(char* input, FILE* fptr){
 					if (number == false ){
 						if (variables > 0){
 							printf("[variable]");
-							/*fprintf(fptr, "	%s DW \n", word);*/
 							printf("%s", varName);
 							for (j = 0; word[j] != '\0'; j++){
 								varName[j] = word[j];
 							}
+							varName[j] = '\0';
 							printf("%s", varName);
 							variables--;
 						}else{
@@ -79,7 +124,7 @@ bool parser(char* input, FILE* fptr){
 					}
 					if (number == true){
 						printf("[number(%i)]", digits);
-						writeVariable(varName, digits, varValue, fptr);
+						writeVariable(varName, digits, varValue, fdata, fstart);
 						number = false;
 						digits = 0;
 					}
@@ -107,62 +152,10 @@ bool parser(char* input, FILE* fptr){
 	free(word);
 	return false;
 }
-bool parser2(char* input){
-	unsigned counter = 0, i = 0;
-	char* word = malloc(sizeof(char) * 1024);
-	bool var = false;
-	int variables = 0;
-	char c;
-	for (c = *input; c != '\0'; c = input[++i]){
-		if (lexDelimiter(c) == true){
-			word[counter] = '\0';
-			printf("%s", word);
-			if (lexKeyword(word) == true){
-				putchar(c);
-				printf("< keyword");
-				var = true;
-			}else {
-				if (counter > 0)
-					variables++;
-				if (var == true && variables > 0){
-					printf("< variable");
-					var = false;
-					variables--;
-				}else if (var == false && variables > 0){
-					printf("< error");
-					variables--;
-				}
-			}
-			if (lexLogOperator(c)){
-				putchar(c);
-				printf("< logic operator");
-			}
-			if (lexMathOperator(c)){
-				putchar(c);
-				printf("< math operator");
-			}
-			if (lexNumber(c) && var == false){
-				putchar(c);
-				printf("< number");
-			}
-			if (finalDelimiter(c)){
-				putchar(c);
-				printf("< end of sentence");
-			}
-			printf("\n");
-			counter = 0;
-		}else{
-			word[counter] = c;
-			counter++;
-		}
-	}
-	free(word);
-	return false;
-}
 
 bool lexDelimiter(char ch){
 	if (
-		ch == '+' || ch == '-' || ch == '=' || ch == ';' || ch == ' ' || ch == '"'
+		ch == '+' || ch == '-' || ch == '=' || ch == ';' || ch == ' ' || ch == '"' || ch == '\n'
 		)
 	{
 		return true;
@@ -213,7 +206,7 @@ bool lexNumber(char ch){
 
 bool lexKeyword(char* word){
 	if (
-		strcmp(word, "i4") == 0 || strcmp(word, "fn") == 0
+		strcmp(word, "i4") == 0 || strcmp(word, "fn") == 0 || strcmp(word, "put") == 0
 		)
 	{
 		return true;
@@ -231,15 +224,14 @@ bool lexDecVar(char* word){
 	return false;
 }
 
-void writeVariable(char* variable, int digCount, char* value, FILE* fptr){
-	fprintf(fptr, "	mov edx, %d\n", digCount);
-	fprintf(fptr, "	mov ecx, %s\n", variable);
-	fprintf(fptr, "	mov ebx, 1\n");
-	fprintf(fptr, "	mov eax, 4\n");
-	fprintf(fptr, "	int 0x80\n");
-	fprintf(fptr, "	mov ebx, 1\n");
-	fprintf(fptr, "	int 0x80\n\n");
+void writeVariable(char* variable, int digCount, char* value, FILE* fdata, FILE* fstart){
+	fprintf(fstart, "	mov ecx, [%s]\n", variable);
+	
+	fprintf(fstart, "	mov edx, %d\n", digCount);
+	fprintf(fstart, "	mov ecx, %s\n", variable);
+	fprintf(fstart, "	mov ebx, 1\n");
+	fprintf(fstart, "	mov eax, 4\n");
+	fprintf(fstart, "	int 0x80\n\t\n");
 
-	fprintf(fptr, "section .data\n");
-	fprintf(fptr, "	%s DB '%s'", variable, value);
+	fprintf(fdata, "	%s dd '%s'\n", variable, value);
 }
