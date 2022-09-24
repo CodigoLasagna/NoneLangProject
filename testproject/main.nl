@@ -1,5 +1,7 @@
-i2 a = 3;
-i2 b = 5;
-put a;
+i2 varA = 3;
+put varA;
 put newLine;
-put b;
+
+varA = varA + 2;
+
+put varA;

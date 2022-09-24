@@ -16,8 +16,10 @@ bool lexKeyword(char*);
 bool finalDelimiter(char);
 
 void writeVariable(char*, int, FILE*, FILE*);
-void assignVariable(char*, char*, FILE*);
+void assignVariable(char*, char*, FILE*, bool);
 void printVariable(char*, FILE*);
+
+void sumVars(char*, char*, FILE*);
 
 int main(){
 	FILE *fdata = fopen("./compiled/src/data.src", "r+"), *fstart = fopen("./compiled/src/start.src", "r+"), *fsrc = fopen("./testproject/main.nl", "r+");
@@ -87,13 +89,14 @@ int main(){
 }
 
 bool parser(char* input, FILE* fdata, FILE* fstart){
-	unsigned counter = 0, i = 0, j = 0, digits = 0, variables = 0;
+	unsigned counter = 0, i = 0, j = 0, digits = 0, variables = 0, varCounter = 0;
 	unsigned varBits = 0;
 	char* varValue = malloc(sizeof(char) * 128);
 	char* word = malloc(sizeof(char) * 1024);
 	char* varName = malloc(sizeof(char) * 128);
+	char* varNameAsign = malloc(sizeof(char) * 128);
 	char c;
-	bool number = false, assign = false, print = false;
+	bool number = false, assign = false, print = false, sum = false;
 	for (c = *input; c != '\0'; c = input[++i]){
 		if (lexDelimiter(c)){
 			word[counter] = '\0';
@@ -120,26 +123,39 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 					if (number == false ){
 						if (variables > 0){
 							printf("[variable]");
-							printf("%s", varName);
-							for (j = 0; word[j] != '\0'; j++){
-								varName[j] = word[j];
-							}
-							varName[j] = '\0';
+							strcpy(varName, word);
 							printf("%s", varName);
 							writeVariable(varName, varBits, fdata, fstart);
 							variables--;
 						}else{
 							if (print == false){
 								printf("[error]");
+								if (varCounter == 1){
+									strcpy(varNameAsign, varName);
+									varCounter = 0;
+								}
+								varCounter++;
+								strcpy(varName, word);
 							}else{
 								printf("[variableToWrite]");
 								printVariable(word, fstart);
+								print = false;
+							}
+							if (assign == true){
+								assignVariable(varNameAsign, word, fstart, false);
+								assign = false;
 							}
 						}
 					}
 					if (number == true){
 						printf("[number(%i)]", digits);
-						assignVariable(varName, varValue, fstart);
+						if (assign == true){
+							assignVariable(varName, varValue, fstart, true);
+							assign = false;
+						}
+						if (sum == true){
+							sumVars(varName, word, fstart);
+						}
 						strcpy(varValue, "");
 						number = false;
 						digits = 0;
@@ -154,6 +170,11 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 			if (lexMathOperator(c)){
 				printf("%c", c);
 				printf("[Math operator]");
+				switch (c) {
+					case '+':
+						sum = true;
+					break;
+				}
 			}
 			if (lexLogOperator(c)){
 				printf("%c", c);
@@ -249,19 +270,35 @@ bool lexDecVar(char* word){
 void writeVariable(char* variable, int digCount, FILE* fdata, FILE* fstart){
 	switch (digCount) {
 		case 2 :
-			fprintf(fdata, "\t%s dw '01', 0x0\n", variable);
+			fprintf(fdata, "\t%s dw '00', 0x0\n", variable);
 		break;
 		case 4 :
-			fprintf(fdata, "\t%s dd '0001', 0x0\n", variable);
+			fprintf(fdata, "\t%s dd '0000', 0x0\n", variable);
 		break;
 	}
 }
-void assignVariable(char* variable, char* value, FILE* fstart){
-	fprintf(fstart, "\tmov ecx, '%s'\n", value);
-	fprintf(fstart, "\tmov [%s], ecx\n\t\n", variable);
+void assignVariable(char* variable, char* value, FILE* fstart, bool t){
+	if (t == false){
+		fprintf(fstart, "\tmov ecx, [%s]\n", value);
+		fprintf(fstart, "\tmov [%s], ecx\n\t\n", variable);
+	}else{
+		fprintf(fstart, "\tmov ecx, '%s'\n", value);
+		fprintf(fstart, "\tmov [%s], ecx\n\t\n", variable);
+	}
 }
-void printVariable(char* variable, FILE* fstart){
 
+void sumVars(char* varA, char* varB, FILE* fstart){
+	fprintf(fstart, "\tmov ecx, [%s]\n", varA);
+	fprintf(fstart, "\tsub ecx, '0'\n");
+	fprintf(fstart, "\tmov ebx, '%s'\n", varB);
+	fprintf(fstart, "\tsub ebx, '0'\n");
+	fprintf(fstart, "\tmov eax, ecx\n");
+	fprintf(fstart, "\tadd eax, ebx\n");
+	fprintf(fstart, "\tadd eax, '0'\n");
+	fprintf(fstart, "\tmov [%s], eax\n\n", varA);
+}
+
+void printVariable(char* variable, FILE* fstart){
 	fprintf(fstart, "\tmov edx, %d\n", 1);
 	fprintf(fstart, "\tmov ecx, %s\n", variable);
 	fprintf(fstart, "\tmov ebx, 1\n");

@@ -1,4 +1,3 @@
 section .data
 	newLine db 0x0a
-	a dw '01', 0x0
-	b dw '01', 0x0
+	varA dw '00', 0x0
