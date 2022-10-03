@@ -1,6 +1,7 @@
 *.o
 *.asm
-example.asm
 main
+*.src
 
 compiled/
+

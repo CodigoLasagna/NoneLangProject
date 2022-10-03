@@ -145,6 +145,9 @@ bool parser(char* input, FILE* fdata, FILE* fstart){
 								assignVariable(varNameAsign, word, fstart, false);
 								assign = false;
 							}
+							if (sum == true){
+								sumVars(varNameAsign, word, fstart);
+							}
 						}
 					}
 					if (number == true){
